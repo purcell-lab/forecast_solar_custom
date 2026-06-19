@@ -1,0 +1,6 @@
+{
+  "name": "Forecast.Solar (PR #174251 custom)",
+  "content_in_root": false,
+  "render_readme": true,
+  "homeassistant": "2026.6.0"
+}

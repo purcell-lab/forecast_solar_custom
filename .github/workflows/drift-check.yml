@@ -1,0 +1,81 @@
+name: Drift check against PR #174251 branch
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: "0 18 * * *"  # 04:00 AEST daily
+  workflow_dispatch:
+
+jobs:
+  drift:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout this repo
+        uses: actions/checkout@v4
+        with:
+          path: custom
+
+      - name: Checkout PR branch from purcell-lab/core
+        uses: actions/checkout@v4
+        with:
+          repository: purcell-lab/core
+          ref: add-forecast-solar-service
+          sparse-checkout: |
+            homeassistant/components/forecast_solar
+          sparse-checkout-cone-mode: true
+          path: core
+
+      - name: Diff (ignoring manifest customisations)
+        id: diff
+        run: |
+          set +e
+          # Build a manifest that strips our custom overrides so the diff only catches code drift
+          python3 - <<'PY'
+          import json, pathlib
+          src = json.load(open("custom/custom_components/forecast_solar/manifest.json"))
+          # Strip custom fields so the comparison is against the upstream-style manifest
+          for k in ("name", "version", "documentation", "issue_tracker"):
+              src.pop(k, None)
+          json.dump(src, open("custom/custom_components/forecast_solar/manifest.normalised.json", "w"), indent=2)
+          theirs = json.load(open("core/homeassistant/components/forecast_solar/manifest.json"))
+          for k in ("name", "version", "documentation", "issue_tracker"):
+              theirs.pop(k, None)
+          json.dump(theirs, open("core/homeassistant/components/forecast_solar/manifest.normalised.json", "w"), indent=2)
+          PY
+
+          # Move normalised manifest into place for the diff
+          cp custom/custom_components/forecast_solar/manifest.normalised.json /tmp/custom_manifest.json
+          cp core/homeassistant/components/forecast_solar/manifest.normalised.json /tmp/core_manifest.json
+
+          # Diff everything except the original manifest.json
+          diff -ruN \
+            --exclude='__pycache__' \
+            --exclude='manifest.json' \
+            --exclude='manifest.normalised.json' \
+            custom/custom_components/forecast_solar/ \
+            core/homeassistant/components/forecast_solar/ > /tmp/code_diff.txt
+          CODE_RC=$?
+
+          diff -u /tmp/core_manifest.json /tmp/custom_manifest.json > /tmp/manifest_diff.txt
+          MAN_RC=$?
+
+          echo "::group::Code diff"
+          cat /tmp/code_diff.txt || true
+          echo "::endgroup::"
+          echo "::group::Manifest (normalised) diff"
+          cat /tmp/manifest_diff.txt || true
+          echo "::endgroup::"
+
+          if [[ $CODE_RC -ne 0 || $MAN_RC -ne 0 ]]; then
+            echo ""
+            echo "❌  DRIFT DETECTED between custom-component repo and PR branch."
+            echo "    Either:"
+            echo "      - Port custom-component changes back to the PR branch:  scripts/port_back_to_pr.sh"
+            echo "      - Or pull PR branch changes into this repo:             scripts/extract_from_pr.sh"
+            exit 1
+          fi
+
+          echo "✅ No drift."

@@ -1,0 +1,17 @@
+{
+  "domain": "forecast_solar",
+  "name": "Forecast.Solar (PR #174251 custom)",
+  "codeowners": [
+    "@klaasnicolaas",
+    "@frenck"
+  ],
+  "config_flow": true,
+  "documentation": "https://github.com/purcell-lab/forecast_solar_custom",
+  "integration_type": "service",
+  "iot_class": "cloud_polling",
+  "requirements": [
+    "forecast-solar==5.0.1"
+  ],
+  "version": "5.0.1+pr174251.20260619",
+  "issue_tracker": "https://github.com/home-assistant/core/pull/174251"
+}
