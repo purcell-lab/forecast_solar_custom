@@ -43,11 +43,11 @@ def _series_for_date(
     """Return ISO-keyed entries from a Forecast.Solar series for one date.
 
     Series keys are UTC-aware datetimes (the Forecast.Solar library v4+
-    requests data using UTC). The ``target_date`` is a calendar date in
-    the API/site timezone, so each key is converted to that timezone
-    both for the date comparison *and* for the emitted ISO string, so
-    downstream consumers see the keys with the site/API offset rather
-    than ``+00:00``.
+    requests data using UTC). ``target_date`` is a calendar date in the
+    API/site timezone, so each key is converted to that timezone both
+    for the date comparison and for the emitted ISO string — downstream
+    consumers see local-zoned timestamps (e.g. ``+10:00``) rather than
+    ``+00:00``.
     """
     return {
         local_ts.isoformat(): val
@@ -63,10 +63,10 @@ def _series_in_tz(
     """Return all ISO-keyed entries from a series, converted to ``tz``.
 
     Keys are emitted with the site/API timezone offset (rather than
-    ``+00:00``) so downstream consumers (e.g. forecast aggregators that
-    parse the attribute map directly) see local-zoned timestamps. No
-    date filter is applied: the full forecast horizon returned by the
-    Forecast.Solar library is preserved.
+    ``+00:00``) so downstream consumers parsing the attribute map
+    directly see local-zoned timestamps. No date filter is applied:
+    the full forecast horizon returned by the Forecast.Solar library
+    is preserved.
     """
     return {
         ts.astimezone(tz).isoformat(): val
@@ -83,11 +83,13 @@ def _today_attributes(estimate: Estimate) -> dict[str, Any]:
     timestamp. ISO keys carry the site/API timezone offset.
 
     The full forecast window returned by the Forecast.Solar library
-    (typically ~48 hours for free accounts, up to several days for paid
+    (typically ~32 hours for free accounts, up to 3-6 days for paid
     accounts) is emitted so downstream optimizers and forecasters can
-    consume more than a single day of lookahead. The recorder write
-    cost is handled separately via ``_unrecorded_attributes`` on the
-    entity class.
+    consume more than a single day of lookahead. Recorder write cost
+    is handled separately via ``_unrecorded_attributes`` on the entity
+    class, so the live state payload is the only remaining concern;
+    even the paid-tier window at 15-minute resolution stays well under
+    typical attribute size limits.
 
     The function name is preserved for backwards compatibility; despite
     the name, the emitted series is the full horizon rather than only
