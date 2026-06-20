@@ -35,9 +35,12 @@ import json, datetime, pathlib
 local = json.load(open("$TMPDIR/manifest.local.json"))
 upstream = json.load(open("$DEST/manifest.json"))
 # Preserve everything from upstream, then re-apply our local override fields
-for k in ("name", "version", "documentation", "issue_tracker"):
+for k in ("name", "version", "documentation", "issue_tracker", "requirements"):
     if k in local:
         upstream[k] = local[k]
+# Note: 'requirements' is preserved from local to keep our forecast-solar pin
+# (currently 5.0.0 to match HA stable's aiohttp 3.13.x). Bump locally if/when
+# upstream HA core ships a newer aiohttp.
 # Bump the date in version
 import re
 m = re.match(r"(\d+\.\d+\.\d+)-pr(\d+)\.\d+", upstream.get("version",""))

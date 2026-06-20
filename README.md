@@ -62,6 +62,10 @@ git diff custom_components/forecast_solar/
 git commit -am "sync from PR branch: <commit-sha>"
 ```
 
+## Library pin divergence
+
+Upstream PR pins `forecast-solar==5.0.1`, which requires `aiohttp>=3.14.0` (only in HA core dev / 2026.7+). On HA 2026.6 stable (aiohttp 3.13.5), pip rejects the install with `No solution found`. This repo pins `forecast-solar==5.0.0` instead — the v5.0.1 release was a single bug-fix (handle missing peak production gracefully) plus dev-dependency bumps; the public client API is unchanged. `port_back_to_pr.sh` strips this divergence when porting fixes upstream.
+
 ## Manifest versioning
 
 `manifest.json:version` follows `5.0.1-pr174251.YYYYMMDD` (SemVer prerelease, since AwesomeVersion rejects PEP 440 `+` local identifiers) — the base version of the integration in core, a build-metadata tag pinning the PR, and a date for ordering. HACS uses this for update detection.
