@@ -1,20 +1,26 @@
 # PR #174251 port-back plan
 
-Status as of 2026-06-20 12:45 BNE.
+Status as of 2026-06-20 12:51 BNE.
 
 Fork: https://github.com/purcell-lab/forecast_solar_custom
 Upstream PR: https://github.com/home-assistant/core/pull/174251
 
-## Commits on fork (newest last)
+## Status: ported, awaiting review
 
-| SHA | Summary | Port back? |
+All four code changes have been pushed to `purcell-lab/core:add-forecast-solar-service` as four separate commits (in the order below). The PR is now waiting on review feedback from the home-assistant/core maintainers; no further work on this branch until that lands.
+
+A companion docs PR against `home-assistant/home-assistant.io` is **not** open yet — it will be drafted once the main PR direction is confirmed by review (in particular the dict response shape, which is the biggest behavioural change reviewers may push back on).
+
+## Commits on fork (newest last) → ported to PR #174251
+
+| Fork SHA | PR SHA | Summary |
 |---|---|---|
-| `e008539` | Tz fix in `_today_attributes` + ship `translations/en.json` | **YES** (tz fix only — translations not needed for core) |
-| `fd7e427` | Emit ISO keys in site/API timezone (`+10:00`) in attributes & service | **YES** |
-| `1276810` | `get_forecast` returns `{watts: {...}, wh_period: {...}}` instead of `{forecast: [...]}` | **YES** — docs PR will be updated as a follow-up |
-| `a069856` | Emit full forecast horizon in `watts`/`wh_period` attributes (drop today-only filter) | **YES** — recorder cost mitigated by `_unrecorded_attributes` |
+| `e008539` | `09bc31a` | Fix tz mismatch in `_today_attributes` |
+| `fd7e427` | `12b9ba7` | Emit ISO keys in site/API timezone (`+10:00`) in attributes & service |
+| `1276810` | `a78d8ff` | `get_forecast` returns `{watts: {...}, wh_period: {...}}` instead of `{forecast: [...]}` |
+| `a069856` | `144dc0d` | Emit full forecast horizon in `watts`/`wh_period` attributes (drop today-only filter) |
 
-All four code changes go upstream as **four separate commits** on `purcell-lab/core:add-forecast-solar-service`, in the order above, so reviewers can evaluate each piece independently.
+The four PR commits are sequenced so each reviewer-evaluable change is independent: tz correctness → wire-format clarity → response shape → horizon.
 
 ## Specific changes
 
@@ -44,7 +50,7 @@ Rationale: consumers reading attributes/service expect to see `+10:00` strings, 
 
 In `services.py`: return `{watts: {ts: W}, wh_period: {ts: Wh}}` instead of `[{time, value, energy_wh}, ...]`.
 
-Rationale: matches the attribute shape exactly, so templates can use the same parsing logic for the live attribute and the service response. The docs PR co-shipping with #174251 will be updated separately to match.
+Rationale: matches the attribute shape exactly, so templates can use the same parsing logic for the live attribute and the service response. A docs PR will be opened separately once the main PR direction is confirmed by review (see Follow-up work below).
 
 ### 4. Full forecast horizon (port back)
 
@@ -56,15 +62,23 @@ The helper `_series_for_date` is retained (no current callers in core), and a ne
 
 ### 5. `translations/en.json` (DO NOT port)
 
-HA core build pipeline auto-generates this from `strings.json`. Custom components must ship it; core does not.
+HA core build pipeline auto-generates this from `strings.json`. Custom components must ship it; core does not. This is the only file that remains fork-only.
 
-## Workflow when porting back
+## Follow-up work (deferred until main PR review lands)
+
+- **Docs PR** against `home-assistant/home-assistant.io` (`source/_integrations/forecast_solar.markdown`) documenting:
+  - The new `forecast_solar.get_forecast` service action and its `{watts, wh_period}` response shape
+  - The `watts` and `wh_period` extra state attributes on the energy production sensors
+  - The local-tz ISO key format and full-horizon coverage
+
+  Held until review confirms the final shape of the main PR; reviewers may request changes (e.g. revert to list-of-objects for the service response) that would otherwise force a docs rewrite.
+
+## Workflow used
 
 1. `./scripts/port_back_to_pr.sh <local-clone-of-PR-174251>` — strips fork-only manifest customizations.
-2. Cherry-pick / re-stage as four separate commits on `purcell-lab/core:add-forecast-solar-service`:
+2. Stage as four separate commits on `purcell-lab/core:add-forecast-solar-service`:
    - tz fix
    - local-tz ISO keys
    - dict service shape
    - full horizon
-3. Push to `purcell-lab/core:add-forecast-solar-service` → PR #174251 updates automatically.
-4. Open a follow-up against the home-assistant.io docs PR to update the documented `get_forecast` response shape.
+3. Push to `purcell-lab/core:add-forecast-solar-service` → PR #174251 updates automatically. Done.
