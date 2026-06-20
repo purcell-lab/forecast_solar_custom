@@ -4,6 +4,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from forecast_solar.models import Estimate
 
@@ -36,10 +37,20 @@ class ForecastSolarSensorEntityDescription(SensorEntityDescription):
     attributes: Callable[[Estimate], dict[str, Any]] | None = None
 
 
-def _series_for_date(series: dict[datetime, int], target_date: date) -> dict[str, int]:
-    """Return ISO-keyed entries from a Forecast.Solar series for one date."""
+def _series_for_date(
+    series: dict[datetime, int], target_date: date, tz: ZoneInfo
+) -> dict[str, int]:
+    """Return ISO-keyed entries from a Forecast.Solar series for one date.
+
+    Series keys are UTC-aware datetimes (the Forecast.Solar library v4+
+    requests data using UTC). The ``target_date`` is a calendar date in
+    the API/site timezone, so each key must be converted to that timezone
+    before comparing its date component.
+    """
     return {
-        ts.isoformat(): val for ts, val in series.items() if ts.date() == target_date
+        ts.isoformat(): val
+        for ts, val in series.items()
+        if ts.astimezone(tz).date() == target_date
     }
 
 
@@ -54,11 +65,16 @@ def _today_attributes(estimate: Estimate) -> dict[str, Any]:
     small at the 15-minute resolution provided by paid Forecast.Solar
     accounts. Recorder write cost is handled separately via
     ``_unrecorded_attributes`` on the entity class.
+
+    ``today`` is the calendar date at the configured site (API) timezone,
+    not UTC — otherwise sites east or west of UTC would get a mix of two
+    local days bucketed into "today".
     """
+    tz = ZoneInfo(estimate.api_timezone)
     today = estimate.now().date()
     return {
-        "watts": _series_for_date(estimate.watts, today),
-        "wh_period": _series_for_date(estimate.wh_period, today),
+        "watts": _series_for_date(estimate.watts, today, tz),
+        "wh_period": _series_for_date(estimate.wh_period, today, tz),
     }
 
 
