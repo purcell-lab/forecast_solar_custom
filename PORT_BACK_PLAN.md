@@ -12,6 +12,7 @@ Upstream PR: https://github.com/home-assistant/core/pull/174251
 | `e008539` | Tz fix in `_today_attributes` + ship `translations/en.json` | **YES** (tz fix only — translations not needed for core) |
 | `fd7e427` | Emit ISO keys in site/API timezone (`+10:00`) in attributes & service | **PROPOSE** as separate follow-up review |
 | `1276810` | `get_forecast` returns `{watts: {...}, wh_period: {...}}` instead of `{forecast: [...]}` | **NO** — fork-only; diverges from the docs PR co-shipping with #174251 |
+| _next_ | Emit full forecast horizon in `watts`/`wh_period` attributes (drop the today-only filter) | **NO** — fork-only; PR #174251 deliberately caps at today to limit attribute size |
 
 ## Specific changes
 
@@ -44,6 +45,12 @@ Fork-only: switch list-of-objects → two dicts. Useful here for templating, but
 ### 4. `translations/en.json` (DO NOT port)
 
 HA core build pipeline auto-generates this from `strings.json`. Custom components must ship it; core does not.
+
+### 5. Full-horizon `watts`/`wh_period` (DO NOT port)
+
+Fork-only: `_today_attributes` now emits the entire forecast window returned by the library, not just today. HAEO's Open-Meteo extractor consumes the `watts` attribute directly and needs >1 day of lookahead, otherwise it interpolates and tiles a single day across the entire optimization horizon.
+
+Kept fork-only because PR #174251 deliberately caps the attribute series at today to keep the live state payload small. If we ever want to upstream this, it should be a separate, explicitly-discussed change.
 
 ## Workflow when porting back
 
