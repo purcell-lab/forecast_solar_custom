@@ -1,15 +1,70 @@
-# Forecast.Solar — PR #174251 custom-component mirror
+# Forecast.Solar — PR #174251 custom-component fork
 
-This repository is a **HACS custom-component mirror** of the Home Assistant core integration `forecast_solar` with the changes from [PR #174251](https://github.com/home-assistant/core/pull/174251) applied.
+This repository is a **HACS custom-component fork** of the Home Assistant core integration `forecast_solar`. It carries the changes from [PR #174251](https://github.com/home-assistant/core/pull/174251) plus a few additional changes that diverge from the PR (see [Fork-only changes](#fork-only-changes)).
 
-> ⚠️ **Not for production.** This exists for live testing of the PR on a real HA instance ahead of upstream merge. The upstream PR is the source of truth for code review; this repo is the test article. Once the PR is merged, install [Home Assistant 2026.x](https://www.home-assistant.io/integrations/forecast_solar) directly and remove this custom component.
+> ⚠️ **Not for production.** This exists for live testing of the PR on a real HA instance ahead of upstream merge, and to iterate on changes that aren't (yet) suitable for the upstream PR. The upstream PR is the source of truth for the change set being proposed to home-assistant/core. Once the PR is merged and the additional fork-only changes are settled, install [Home Assistant 2026.x](https://www.home-assistant.io/integrations/forecast_solar) directly and remove this custom component.
 
 ## What PR #174251 adds
 
-- A new `forecast_solar.get_forecast` service action that returns the cached forecast time-series as `[{time, value, energy_wh}, ...]`, optionally filtered by date range or aggregated to whole hours.
-- `watts` and `wh_period` dicts as extra state attributes on `sensor.energy_production_today`, capped to today's entries (kept under the recorder's 16 KiB attribute size warning even at 15-minute paid-tier resolution), and marked `_unrecorded_attributes`.
+- A new `forecast_solar.get_forecast` service action that returns the cached forecast time-series.
+- `watts` and `wh_period` dicts as extra state attributes on `sensor.energy_production_today`, marked `_unrecorded_attributes` so the recorder doesn't pay the write cost.
 
 See the [PR description](https://github.com/home-assistant/core/pull/174251) and [feature request #619](https://github.com/home-assistant/feature-requests/issues/619) for full context.
+
+## Fork-only changes
+
+These changes live on the fork only. See [`PORT_BACK_PLAN.md`](./PORT_BACK_PLAN.md) for the disposition of each commit (port back, propose separately, or keep fork-only).
+
+| Change | Disposition | Why |
+|---|---|---|
+| Tz-aware `_today_attributes` (compare and emit dates in the site/API timezone, not UTC) | **Port back** to PR #174251 | Real bug for sites east/west of UTC — overnight UTC entries leak into "today" |
+| ISO keys emitted in site/API timezone (`+10:00` instead of `+00:00`) | **Propose separately** | Opinionated polish; downstream consumers expect local offsets |
+| `get_forecast` returns `{watts: {…}, wh_period: {…}}` dicts instead of `[{time, value, energy_wh}, …]` list | **Fork-only** | Conflicts with the docs PR co-shipping with #174251; useful here for templating |
+| `_today_attributes` emits the **full forecast horizon** (not just today's entries) | **Fork-only** | HAEO's Open-Meteo extractor consumes the `watts` attribute directly and needs >1 day of lookahead. PR #174251 deliberately caps at today to keep the live state payload small |
+| Ships `translations/en.json` | **Fork-only** | HA core auto-generates this from `strings.json` at build time; custom components must ship it |
+
+## Attribute shape
+
+`sensor.energy_production_today` exposes two attribute dicts:
+
+```yaml
+state: 28.989  # kWh — total energy production forecast for today
+attributes:
+  unit_of_measurement: kWh
+  watts:
+    "2026-06-20T10:00:00+10:00": 5683       # W at this timestamp
+    "2026-06-20T11:00:00+10:00": 5349
+    ...
+    "2026-06-21T17:00:00+10:00": 1291       # ← full horizon (fork-only)
+    "2026-06-21T17:03:53+10:00": 0
+  wh_period:
+    "2026-06-20T10:00:00+10:00": 1421       # Wh in the interval starting here
+    ...
+```
+
+Keys are ISO 8601 in the site/API timezone (per the [PRR](https://github.com/home-assistant/core/blob/dev/homeassistant/components/forecast_solar/sensor.py) configured location). The series spans the full window the forecast-solar library returns — typically ~32 hours on the free tier, longer on paid tiers.
+
+## Service shape
+
+```yaml
+service: forecast_solar.get_forecast
+target:
+  entity_id: sensor.energy_production_today
+response_variable: forecast
+```
+
+Returns (fork-only dict shape, see [Fork-only changes](#fork-only-changes)):
+
+```yaml
+forecast:
+  watts:
+    "2026-06-20T10:00:00+10:00": 5683
+    "2026-06-20T11:00:00+10:00": 5349
+    ...
+  wh_period:
+    "2026-06-20T10:00:00+10:00": 1421
+    ...
+```
 
 ## Install via HACS
 
@@ -19,7 +74,7 @@ See the [PR description](https://github.com/home-assistant/core/pull/174251) and
 4. Find "Forecast.Solar (PR #174251 custom)" in HACS → Download
 5. **Restart Home Assistant** (full restart, not reload — HA needs to discover the custom component over the built-in one)
 6. Existing Forecast.Solar config entries will load against the custom component automatically — no reconfiguration needed
-7. Confirm install by checking logs: `Setup of forecast_solar took ...` will be followed by HA's standard `You are using a custom integration forecast_solar which has not been tested by Home Assistant` warning. That is expected.
+7. Confirm install by checking logs: `Setup of forecast_solar took …` will be followed by HA's standard `You are using a custom integration forecast_solar which has not been tested by Home Assistant` warning. That is expected.
 
 ## Uninstall
 
@@ -27,9 +82,23 @@ See the [PR description](https://github.com/home-assistant/core/pull/174251) and
 2. Restart Home Assistant
 3. The built-in `forecast_solar` integration re-engages automatically with your existing config entry
 
+## Use with HAEO
+
+The forecast_solar entity is consumed by HAEO via its Open-Meteo extractor, which scans entity attributes for a `watts` mapping of `datetime → number`. The full-horizon attribute (see [Fork-only changes](#fork-only-changes)) is required for this — with the upstream today-only filter, HAEO has nothing to feed the optimizer past sunset and tiles a synthetic single day across its horizon.
+
+To wire it up:
+
+1. HAEO → ⋮ → **Add subentry** → Solar
+2. Name: e.g. "Solar (forecast_solar)"
+3. Connection: your AC-coupled inverter/switchboard node
+4. Forecast: `sensor.energy_production_today`
+5. Curtailment: constant `false` (or wire to a real curtailment signal)
+
+HAEO will resample the irregular library cadence (hourly + sunrise/sunset edge points) onto its internal grid; expect ~±1 kW interpolation differences around steep ramps.
+
 ## Workflow
 
-This repo is the **source of truth during testing**. The upstream PR branch (`purcell-lab/core:add-forecast-solar-service`) is the source of truth for code review.
+This repo is the **source of truth during testing**. The upstream PR branch (`purcell-lab/core:add-forecast-solar-service`) is the source of truth for code review of the changes being proposed to home-assistant/core.
 
 ```
 purcell-lab/forecast_solar_custom (this repo)
@@ -45,12 +114,12 @@ home-assistant/core:dev
 2. Commit, push
 3. On your HA instance: HACS → "Forecast.Solar (PR #174251 custom)" → Update → Restart HA
 4. Test
-5. When satisfied, port changes back to the PR branch via `scripts/port_back_to_pr.sh`
+5. When satisfied, port changes back to the PR branch via `scripts/port_back_to_pr.sh` (only for changes flagged port-back in [`PORT_BACK_PLAN.md`](./PORT_BACK_PLAN.md))
 6. Push to `purcell-lab/core:add-forecast-solar-service` → PR #174251 updates
 
 ### Drift detection
 
-A GitHub Action runs daily and on every push, diffing `custom_components/forecast_solar/` here against `homeassistant/components/forecast_solar/` in the PR branch. If they have diverged (excluding `manifest.json` version/name fields), the action fails — surfacing any unported changes early.
+A GitHub Action runs daily and on every push, diffing `custom_components/forecast_solar/` here against `homeassistant/components/forecast_solar/` in the PR branch. If they have diverged outside the expected fork-only changes (and excluding `manifest.json` version/name fields), the action fails — surfacing any unported changes early.
 
 ### Resyncing from the PR branch
 
@@ -74,10 +143,12 @@ Upstream PR pins `forecast-solar==5.0.1`, which requires `aiohttp>=3.14.0` (only
 
 | Path | Source |
 |---|---|
-| `custom_components/forecast_solar/*.py` | `homeassistant/components/forecast_solar/*.py` from PR branch |
-| `custom_components/forecast_solar/manifest.json` | Modified: name, version, documentation URL |
-| `custom_components/forecast_solar/services.yaml`, `icons.json`, `strings.json` | Verbatim from PR branch |
+| `custom_components/forecast_solar/*.py` | `homeassistant/components/forecast_solar/*.py` from PR branch, plus fork-only changes |
+| `custom_components/forecast_solar/manifest.json` | Modified: name, version, documentation URL, library pin |
+| `custom_components/forecast_solar/translations/en.json` | Fork-only: copy of `strings.json` so the UI renders without core's build pipeline |
+| `custom_components/forecast_solar/services.yaml`, `icons.json`, `strings.json` | From PR branch |
 | `hacs.json` | HACS custom-repo metadata |
+| `PORT_BACK_PLAN.md` | Per-commit disposition: port back, propose separately, or keep fork-only |
 | `scripts/extract_from_pr.sh` | Pulls integration files from PR branch into this repo |
 | `scripts/port_back_to_pr.sh` | Generates patch from this repo for the PR branch |
 | `.github/workflows/drift-check.yml` | CI: diff against PR branch |
