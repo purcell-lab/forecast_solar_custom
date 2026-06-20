@@ -40,10 +40,10 @@ for k in ("name", "version", "documentation", "issue_tracker"):
         upstream[k] = local[k]
 # Bump the date in version
 import re
-m = re.match(r"(\d+\.\d+\.\d+)\+pr(\d+)\.\d+", upstream.get("version",""))
+m = re.match(r"(\d+\.\d+\.\d+)-pr(\d+)\.\d+", upstream.get("version",""))
 if m:
     today = datetime.datetime.utcnow().strftime("%Y%m%d")
-    upstream["version"] = f"{m.group(1)}+pr{m.group(2)}.{today}"
+    upstream["version"] = f"{m.group(1)}-pr{m.group(2)}.{today}"
 json.dump(upstream, open("$DEST/manifest.json", "w"), indent=2)
 print("Updated manifest:", upstream)
 PY

@@ -64,7 +64,7 @@ git commit -am "sync from PR branch: <commit-sha>"
 
 ## Manifest versioning
 
-`manifest.json:version` follows `5.0.1+pr174251.YYYYMMDD` — the base version of the integration in core, a build-metadata tag pinning the PR, and a date for ordering. HACS uses this for update detection.
+`manifest.json:version` follows `5.0.1-pr174251.YYYYMMDD` (SemVer prerelease, since AwesomeVersion rejects PEP 440 `+` local identifiers) — the base version of the integration in core, a build-metadata tag pinning the PR, and a date for ordering. HACS uses this for update detection.
 
 ## Files
 

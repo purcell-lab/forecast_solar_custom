@@ -12,6 +12,6 @@
   "requirements": [
     "forecast-solar==5.0.1"
   ],
-  "version": "5.0.1+pr174251.20260619",
+  "version": "5.0.1-pr174251.20260619",
   "issue_tracker": "https://github.com/home-assistant/core/pull/174251"
 }
