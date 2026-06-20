@@ -122,8 +122,12 @@ def async_setup_services(hass: HomeAssistant) -> None:
                 continue
             if end is not None and ts >= end:
                 break
+            # The library returns UTC-aware keys; emit ISO strings in
+            # the site/API timezone so consumers see the local offset
+            # (e.g. ``+10:00``) rather than ``+00:00``.
+            local_ts = ts.astimezone(tz) if tz is not None else ts
             entry_dict: dict[str, JsonValueType] = {
-                "time": ts.isoformat(),
+                "time": local_ts.isoformat(),
                 "value": watts[ts],
             }
             if ts in wh_period:
